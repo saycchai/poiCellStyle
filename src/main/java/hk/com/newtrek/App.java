@@ -37,37 +37,7 @@ public class App {
 		try (OutputStream os = Files.newOutputStream(targetPath);
 				InputStream is = App.class.getClassLoader().getResourceAsStream("template.xlsx");) {
 			XSSFWorkbook wb = new XSSFWorkbook(is);
-			DataFormat fmt = wb.createDataFormat();
-			unlockedTextCellStyle = wb.createCellStyle();
-			unlockedTextCellStyle.setLocked(false);
-			unlockedTextCellStyle.setDataFormat(fmt.getFormat("@"));
-			unlockedTextCellStyle.setFillForegroundColor(IndexedColors.WHITE.getIndex());
-			unlockedTextCellStyle.setFillPattern(CellStyle.SOLID_FOREGROUND);
-
-			// border
-			unlockedTextCellStyle.setBorderBottom(XSSFCellStyle.BORDER_THIN);
-			unlockedTextCellStyle.setBottomBorderColor(IndexedColors.BLACK.getIndex());
-			unlockedTextCellStyle.setBorderTop(XSSFCellStyle.BORDER_THIN);
-			unlockedTextCellStyle.setTopBorderColor(IndexedColors.BLACK.getIndex());
-			unlockedTextCellStyle.setBorderRight(XSSFCellStyle.BORDER_THIN);
-			unlockedTextCellStyle.setRightBorderColor(IndexedColors.BLACK.getIndex());
-			unlockedTextCellStyle.setBorderLeft(XSSFCellStyle.BORDER_THIN);
-			unlockedTextCellStyle.setLeftBorderColor(IndexedColors.BLACK.getIndex());
-
-			textCellStyle = wb.createCellStyle();
-			textCellStyle.setDataFormat(fmt.getFormat("@"));
-			textCellStyle.setFillForegroundColor(new XSSFColor(new java.awt.Color(242, 242, 242)));
-			textCellStyle.setFillPattern(CellStyle.SOLID_FOREGROUND);
-
-			// border
-			textCellStyle.setBorderBottom(XSSFCellStyle.BORDER_THIN);
-			textCellStyle.setBottomBorderColor(IndexedColors.BLACK.getIndex());
-			textCellStyle.setBorderTop(XSSFCellStyle.BORDER_THIN);
-			textCellStyle.setTopBorderColor(IndexedColors.BLACK.getIndex());
-			textCellStyle.setBorderRight(XSSFCellStyle.BORDER_THIN);
-			textCellStyle.setRightBorderColor(IndexedColors.BLACK.getIndex());
-			textCellStyle.setBorderLeft(XSSFCellStyle.BORDER_THIN);
-			textCellStyle.setLeftBorderColor(IndexedColors.BLACK.getIndex());
+			initStyle(wb);
 
 			Sheet sheet = wb.getSheet("Order");
 			int rowIdx = rowStartIndex;
@@ -106,82 +76,8 @@ public class App {
 
 				cell = createTextStyleCell(row, colIdx++);
 				cell.setCellValue(order.getKsoLocation());
-
-				for (ShipmentEntity shipment : order.getShipmentEntities()) {
-					final int shipmentSpanRow = (int) shipment.getTotalProduct();
-					int shipColIdx = colIdx;
-					final int totalShipCol = 10;
-
-					for (int i = colIdx; i < colIdx + totalShipCol; i++) {
-						// merged cell region for shipment fields
-						CellRangeAddress mergedRegion = new CellRangeAddress(rowIdx, rowIdx + shipmentSpanRow - 1, i,
-								i);
-						sheet.addMergedRegion(mergedRegion);
-					}
-
-					row = getRow(sheet, rowIdx);
-
-					cell = createTextStyleCell(row, shipColIdx++);
-					cell.setCellValue(shipment.getShipmentNo());
-
-					cell = createTextStyleCell(row, shipColIdx++);
-					cell.setCellValue(shipment.getOpcoRequestedLrd());
-
-					cell = createTextStyleCell(row, shipColIdx++);
-					cell.setCellValue(shipment.getExpectedLrd());
-
-					cell = createTextStyleCell(row, shipColIdx++);
-					cell.setCellValue(shipment.getExpectedLrd());
-					enableCellForProforma(cell, order);
-
-					cell = createTextStyleCell(row, shipColIdx++);
-					cell.setCellValue(shipment.getLrdChangeReason());
-
-					cell = createTextStyleCell(row, shipColIdx++);
-					cell.setCellValue(shipment.getLrdChangeReason());
-					enableCellForProforma(cell, order);
-
-					cell = createTextStyleCell(row, shipColIdx++);
-					cell.setCellValue(shipment.getRevisedLrd());
-
-					cell = createTextStyleCell(row, shipColIdx++);
-					cell.setCellValue(shipment.getRevisedLrd());
-					enableCellForOfficialOrder(cell, order);
-
-					cell = createTextStyleCell(row, shipColIdx++);
-					cell.setCellValue(shipment.getReason());
-
-					cell = createTextStyleCell(row, shipColIdx++);
-					cell.setCellValue(shipment.getReason());
-					enableCellForOfficialOrder(cell, order);
-
-					for (ProductEntity product : shipment.getProductEntities()) {
-						int productColIdx = shipColIdx;
-
-						row = getRow(sheet, rowIdx);
-
-						cell = createTextStyleCell(row, productColIdx++);
-						cell.setCellValue(product.getProductCode());
-
-						cell = createTextStyleCell(row, productColIdx++);
-						cell.setCellValue(product.getOpcoProductCode());
-
-						cell = createTextStyleCell(row, productColIdx++);
-						cell.setCellValue(product.getDescription());
-
-						cell = createTextStyleCell(row, productColIdx++);
-						cell.setCellValue(product.getExpectedQty());
-
-						cell = createTextStyleCell(row, productColIdx++);
-						cell.setCellValue(product.getRevisedQty());
-
-						cell = createTextStyleCell(row, productColIdx++);
-						cell.setCellValue(product.getRevisedQty());
-						enableCellForOfficialOrder(cell, order);
-
-						rowIdx++;
-					}
-				}
+				
+				rowIdx = processShipment(order, sheet, rowIdx, colIdx);
 			}
 
 			// protected all the worksheets
@@ -196,6 +92,146 @@ public class App {
 		System.out.println("... finish generating order excel: " + targetPath.toAbsolutePath().toString() + "...");
 	}
 
+	private static int processShipment(
+			final OrderEntity order
+			, final Sheet sheet
+			, final int rowIdx
+			, final int colIdx
+	){
+		Row row = null;
+		Cell cell = null;
+
+		int shipRowIdx = rowIdx;
+
+		for (ShipmentEntity shipment : order.getShipmentEntities()) {
+			final int shipmentSpanRow = (int) shipment.getTotalProduct();
+			int shipColIdx = colIdx;
+			final int totalShipCol = 10;
+
+			for (int i = colIdx; i < colIdx + totalShipCol; i++) {
+				// merged cell region for shipment fields
+				CellRangeAddress mergedRegion = new CellRangeAddress(shipRowIdx, shipRowIdx + shipmentSpanRow - 1, i,i);
+				sheet.addMergedRegion(mergedRegion);
+			}
+
+			row = getRow(sheet, shipRowIdx);
+
+			cell = createTextStyleCell(row, shipColIdx++);
+			cell.setCellValue(shipment.getShipmentNo());
+
+			cell = createTextStyleCell(row, shipColIdx++);
+			cell.setCellValue(shipment.getOpcoRequestedLrd());
+
+			cell = createTextStyleCell(row, shipColIdx++);
+			cell.setCellValue(shipment.getExpectedLrd());
+
+			cell = createTextStyleCell(row, shipColIdx++);
+			cell.setCellValue(shipment.getExpectedLrd());
+			enableCellForProforma(cell, order);
+
+			cell = createTextStyleCell(row, shipColIdx++);
+			cell.setCellValue(shipment.getLrdChangeReason());
+
+			cell = createTextStyleCell(row, shipColIdx++);
+			cell.setCellValue(shipment.getLrdChangeReason());
+			enableCellForProforma(cell, order);
+
+			cell = createTextStyleCell(row, shipColIdx++);
+			cell.setCellValue(shipment.getRevisedLrd());
+
+			cell = createTextStyleCell(row, shipColIdx++);
+			cell.setCellValue(shipment.getRevisedLrd());
+			enableCellForOfficialOrder(cell, order);
+
+			cell = createTextStyleCell(row, shipColIdx++);
+			cell.setCellValue(shipment.getReason());
+
+			cell = createTextStyleCell(row, shipColIdx++);
+			cell.setCellValue(shipment.getReason());
+			enableCellForOfficialOrder(cell, order);
+
+			shipRowIdx = processShipmentProduct(order, shipment, sheet, shipRowIdx, shipColIdx);
+		}
+
+		return shipRowIdx;
+	}
+	
+	private static int processShipmentProduct(
+			final OrderEntity order
+			, final ShipmentEntity shipment
+			, final Sheet sheet
+			, final int shipRowIdx
+			, final int shipColIdx
+	){
+		Row row = null;
+		Cell cell = null;
+		int productRowIdx = shipRowIdx;
+
+		for (ProductEntity product : shipment.getProductEntities()) {
+			int productColIdx = shipColIdx;
+
+			row = getRow(sheet, productRowIdx);
+
+			cell = createTextStyleCell(row, productColIdx++);
+			cell.setCellValue(product.getProductCode());
+
+			cell = createTextStyleCell(row, productColIdx++);
+			cell.setCellValue(product.getOpcoProductCode());
+
+			cell = createTextStyleCell(row, productColIdx++);
+			cell.setCellValue(product.getDescription());
+
+			cell = createTextStyleCell(row, productColIdx++);
+			cell.setCellValue(product.getExpectedQty());
+
+			cell = createTextStyleCell(row, productColIdx++);
+			cell.setCellValue(product.getRevisedQty());
+
+			cell = createTextStyleCell(row, productColIdx++);
+			cell.setCellValue(product.getRevisedQty());
+			enableCellForOfficialOrder(cell, order);
+
+			productRowIdx++;
+		}
+		
+		return productRowIdx;
+	}
+	
+	private static void initStyle(final XSSFWorkbook wb)
+	{
+		DataFormat fmt = wb.createDataFormat();
+		unlockedTextCellStyle = wb.createCellStyle();
+		unlockedTextCellStyle.setLocked(false);
+		unlockedTextCellStyle.setDataFormat(fmt.getFormat("@"));
+		unlockedTextCellStyle.setFillForegroundColor(IndexedColors.WHITE.getIndex());
+		unlockedTextCellStyle.setFillPattern(CellStyle.SOLID_FOREGROUND);
+
+		// border
+		unlockedTextCellStyle.setBorderBottom(XSSFCellStyle.BORDER_THIN);
+		unlockedTextCellStyle.setBottomBorderColor(IndexedColors.BLACK.getIndex());
+		unlockedTextCellStyle.setBorderTop(XSSFCellStyle.BORDER_THIN);
+		unlockedTextCellStyle.setTopBorderColor(IndexedColors.BLACK.getIndex());
+		unlockedTextCellStyle.setBorderRight(XSSFCellStyle.BORDER_THIN);
+		unlockedTextCellStyle.setRightBorderColor(IndexedColors.BLACK.getIndex());
+		unlockedTextCellStyle.setBorderLeft(XSSFCellStyle.BORDER_THIN);
+		unlockedTextCellStyle.setLeftBorderColor(IndexedColors.BLACK.getIndex());
+
+		textCellStyle = wb.createCellStyle();
+		textCellStyle.setDataFormat(fmt.getFormat("@"));
+		textCellStyle.setFillForegroundColor(new XSSFColor(new java.awt.Color(242, 242, 242)));
+		textCellStyle.setFillPattern(CellStyle.SOLID_FOREGROUND);
+
+		// border
+		textCellStyle.setBorderBottom(XSSFCellStyle.BORDER_THIN);
+		textCellStyle.setBottomBorderColor(IndexedColors.BLACK.getIndex());
+		textCellStyle.setBorderTop(XSSFCellStyle.BORDER_THIN);
+		textCellStyle.setTopBorderColor(IndexedColors.BLACK.getIndex());
+		textCellStyle.setBorderRight(XSSFCellStyle.BORDER_THIN);
+		textCellStyle.setRightBorderColor(IndexedColors.BLACK.getIndex());
+		textCellStyle.setBorderLeft(XSSFCellStyle.BORDER_THIN);
+		textCellStyle.setLeftBorderColor(IndexedColors.BLACK.getIndex());
+	}
+	
 	private static void enableCellForProforma(final Cell cell, final OrderEntity order) {
 		if ("PROFORMA".equalsIgnoreCase(order.getStatus())) {
 			cell.setCellStyle(unlockedTextCellStyle);
@@ -246,33 +282,33 @@ public class App {
 
 		product = new OrderEntity.ProductEntity();
 		product.setProductCode("PC17000253").setOpcoProductCode("11281706").setDescription("RP Test Quotation 11281706")
-				.setExpectedQty("100").setRevisedQty("");
+				.setExpectedQty("100").setRevisedQty("1");
 		shipment.addProduct(product);
 
 		product = new OrderEntity.ProductEntity();
 		product.setProductCode("PC17000252").setOpcoProductCode("11281705").setDescription("RP Test Quotation 11281705")
-				.setExpectedQty("100").setRevisedQty("");
+				.setExpectedQty("100").setRevisedQty("2");
 		shipment.addProduct(product);
 
 		product = new OrderEntity.ProductEntity();
 		product.setProductCode("PC17000251").setOpcoProductCode("78945623").setDescription("RP TEST QUOTATION 11281704")
-				.setExpectedQty("100").setRevisedQty("10");
+				.setExpectedQty("100").setRevisedQty("3");
 		shipment.addProduct(product);
 
 		order.addShipment(shipment);
 
 		shipment = new OrderEntity.ShipmentEntity();
-		shipment.setShipmentNo("2").setOpcoRequestedLrd("11/8/2019").setExpectedLrd("12/10/2019").setLrdChangeReason("")
-				.setRevisedLrd("11/11/2019").setReason("KSO - Late LC Issuance");
+		shipment.setShipmentNo("2").setOpcoRequestedLrd("11/8/2019").setExpectedLrd("12/10/2019").setLrdChangeReason("KSO - Data entry error")
+				.setRevisedLrd("11/11/2019").setReason("KSO – Artwork or Quality Approval delay");
 
 		product = new OrderEntity.ProductEntity();
 		product.setProductCode("PC17000253").setOpcoProductCode("11281706").setDescription("RP Test Quotation 11281706")
-				.setExpectedQty("100").setRevisedQty("");
+				.setExpectedQty("100").setRevisedQty("4");
 		shipment.addProduct(product);
 
 		product = new OrderEntity.ProductEntity();
 		product.setProductCode("PC17000252").setOpcoProductCode("11281705").setDescription("RP Test Quotation 11281705")
-				.setExpectedQty("100").setRevisedQty("");
+				.setExpectedQty("100").setRevisedQty("5");
 		shipment.addProduct(product);
 
 		order.addShipment(shipment);
@@ -286,21 +322,21 @@ public class App {
 
 		shipment = new OrderEntity.ShipmentEntity();
 		shipment.setShipmentNo("1").setOpcoRequestedLrd("11/8/2019").setExpectedLrd("1/7/2019")
-				.setLrdChangeReason("KSO - CPI - Delay LRD").setRevisedLrd("").setReason("");
+				.setLrdChangeReason("OPCO - LT not respected").setRevisedLrd("").setReason("OPCO – Selected vessel CY opening later than LRD");
 
 		product = new OrderEntity.ProductEntity();
 		product.setProductCode("PC17000253").setOpcoProductCode("11281706").setDescription("RP Test Quotation 11281706")
-				.setExpectedQty("100").setRevisedQty("");
+				.setExpectedQty("100").setRevisedQty("10");
 		shipment.addProduct(product);
 
 		product = new OrderEntity.ProductEntity();
 		product.setProductCode("PC17000252").setOpcoProductCode("11281705").setDescription("RP Test Quotation 11281705")
-				.setExpectedQty("100").setRevisedQty("");
+				.setExpectedQty("100").setRevisedQty("20");
 		shipment.addProduct(product);
 
 		product = new OrderEntity.ProductEntity();
 		product.setProductCode("PC17000251").setOpcoProductCode("78945623").setDescription("RP TEST QUOTATION 11281704")
-				.setExpectedQty("100").setRevisedQty("");
+				.setExpectedQty("100").setRevisedQty("30");
 		shipment.addProduct(product);
 
 		order.addShipment(shipment);
